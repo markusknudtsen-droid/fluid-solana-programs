@@ -657,8 +657,7 @@ export class VaultResolver {
   }
 
   async getAvailableRewards(vaultId: number): Promise<VaultAvailableRewards> {
-    const totalSupplyAndBorrow = (await this.getVaultEntireData(vaultId))
-      .totalSupplyAndBorrow;
+    const totalSupplyAndBorrow = await this.getTotalSupplyAndBorrowData(vaultId);
     return this.buildAvailableRewards(totalSupplyAndBorrow);
   }
 
@@ -681,6 +680,35 @@ export class VaultResolver {
           )
         : new BN(0),
     };
+  }
+
+  private async getTotalSupplyAndBorrowData(
+    vaultId: number
+  ): Promise<TotalSupplyAndBorrow> {
+    const constantViews = await this._getVaultsConstants(vaultId);
+    const vaultConfig = this.pda.get_vault_config({ vaultId });
+    const { userSupplyData, overallTokenData } =
+      await this.liquidity.getUserSupplyData(
+        vaultConfig,
+        MintInfo.getMintForToken(constantViews.supplyToken) as MintKeys
+      );
+    const { userBorrowData, overallTokenData: overallTokenDataBorrow } =
+      await this.liquidity.getUserBorrowData(
+        vaultConfig,
+        MintInfo.getMintForToken(constantViews.borrowToken) as MintKeys
+      );
+    const exchangePricesAndRates = await this._getVaultsExchangePricesAndRates(
+      vaultId,
+      overallTokenData.supplyRate,
+      overallTokenDataBorrow.borrowRate
+    );
+
+    return this._getTotalSupplyAndBorrow(
+      vaultId,
+      exchangePricesAndRates,
+      userSupplyData.supply,
+      userBorrowData.borrow
+    );
   }
 
   getNftOwner(mint: PublicKey): PublicKey {
