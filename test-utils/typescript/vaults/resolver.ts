@@ -656,6 +656,11 @@ export class VaultResolver {
     return vaultEntireData;
   }
 
+  /**
+   * Get rewards currently available for a vault before rebalance
+   * @param vaultId The vault identifier
+   * @returns Supply-side rewards and borrow-side discounts available to rebalance
+   */
   async getAvailableRewards(vaultId: number): Promise<VaultAvailableRewards> {
     const totalSupplyAndBorrow = await this.getTotalSupplyAndBorrowData(vaultId);
     return this.buildAvailableRewards(totalSupplyAndBorrow);
