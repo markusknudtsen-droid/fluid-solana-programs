@@ -18,6 +18,7 @@ export interface FTokenDetails {
   conversionRateToAssets: BN; // Example conversion rate for 1 share to assets
   rewardsRate: BN; // Current rewards rate
   supplyRate: BN; // Current supply rate from liquidity
+  availableRewards: BN; // Rewards currently available to be rebalanced
   rebalanceDifference: BN; // Difference between totalAssets and liquidity balance
   userSupplyData: UserSupplyData; // User's supply data from liquidity
 }
@@ -51,6 +52,15 @@ export interface RewardsRateModelConfig {
   maxRate: BN;
   rewardAmount: BN;
   initiator: PublicKey;
+}
+
+/**
+ * Rewards that are currently accrued but not yet rebalanced into liquidity
+ */
+export interface AvailableRewardsData {
+  totalAssets: BN;
+  liquidityBalance: BN;
+  availableRewards: BN;
 }
 
 /**

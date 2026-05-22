@@ -568,6 +568,44 @@ describe("FTokenBasicActionsTests", () => {
     );
   });
 
+  it("Should expose available rewards before and after rebalance", async () => {
+    await setup.updateRebalancer(setup.alice.publicKey.toString());
+    await setup.depositToLending(setup.underlying, DEFAULT_AMOUNT, setup.alice);
+    await setup.setRewardsRate(
+      setup.underlying,
+      new BN(20 * 1e12),
+      DEFAULT_AMOUNT,
+      new BN(PASS_1YEAR_TIME),
+      new BN(1)
+    );
+
+    setup.warp(PASS_1YEAR_TIME);
+    await setup.updateRate(setup.underlying);
+
+    const expectedRewards = DEFAULT_AMOUNT.div(new BN(5));
+    const rewardsBefore = await lendingResolver.getAvailableRewards(
+      setup.underlying
+    );
+    const detailsBefore = await lendingResolver.getFTokenDetails(
+      setup.underlying
+    );
+
+    expect(rewardsBefore.availableRewards.toString()).to.be.eq(
+      expectedRewards.toString()
+    );
+    expect(detailsBefore.availableRewards.toString()).to.be.eq(
+      expectedRewards.toString()
+    );
+
+    await setup.rebalance(setup.underlying, setup.alice);
+
+    const rewardsAfter = await lendingResolver.getAvailableRewards(
+      setup.underlying
+    );
+
+    expect(rewardsAfter.availableRewards.toString()).to.be.eq("0");
+  });
+
   it("Should updateRates_CaseWhenRewardsEnded", async () => {
     let timestamp = setup.timestamp();
     let startTime = parseInt(timestamp) + 24 * 60 * 60 * 10; // day 10

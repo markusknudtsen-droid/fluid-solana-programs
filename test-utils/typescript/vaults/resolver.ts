@@ -13,6 +13,7 @@ import {
   Configs,
   ExchangePricesAndRates,
   TotalSupplyAndBorrow,
+  VaultAvailableRewards,
   LimitsAndAvailability,
   VaultState,
   UserPosition,
@@ -630,6 +631,13 @@ export class VaultResolver {
       userBorrowData
     );
 
+    const totalSupplyAndBorrow = await this._getTotalSupplyAndBorrow(
+      vaultId,
+      exchangePricesAndRates,
+      liquiditySupply,
+      liquidityBorrow
+    );
+
     let vaultEntireData: VaultEntireData = {
       vault: this.pda.get_vault_config({ vaultId }),
       isSmartCol: false,
@@ -641,15 +649,71 @@ export class VaultResolver {
       liquidityUserSupplyData: userSupplyData,
       liquidityUserBorrowData: userBorrowData,
       vaultState: await this.getVaultState(vaultId),
-      totalSupplyAndBorrow: await this._getTotalSupplyAndBorrow(
-        vaultId,
-        exchangePricesAndRates,
-        liquiditySupply,
-        liquidityBorrow
-      ),
+      totalSupplyAndBorrow,
+      availableRewards: this.buildAvailableRewards(totalSupplyAndBorrow),
     };
 
     return vaultEntireData;
+  }
+
+  /**
+   * Get rewards currently available for a vault before rebalance
+   * @param vaultId The vault identifier
+   * @returns Supply-side rewards and borrow-side discounts available to rebalance
+   */
+  async getAvailableRewards(vaultId: number): Promise<VaultAvailableRewards> {
+    const totalSupplyAndBorrow = await this.getTotalSupplyAndBorrowData(vaultId);
+    return this.buildAvailableRewards(totalSupplyAndBorrow);
+  }
+
+  private buildAvailableRewards(
+    totalSupplyAndBorrow: TotalSupplyAndBorrow
+  ): VaultAvailableRewards {
+    return {
+      supply: totalSupplyAndBorrow.totalSupplyLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalSupplyVault
+      )
+        ? totalSupplyAndBorrow.totalSupplyLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalSupplyVault
+          )
+        : new BN(0),
+      borrow: totalSupplyAndBorrow.totalBorrowLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalBorrowVault
+      )
+        ? totalSupplyAndBorrow.totalBorrowLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalBorrowVault
+          )
+        : new BN(0),
+    };
+  }
+
+  private async getTotalSupplyAndBorrowData(
+    vaultId: number
+  ): Promise<TotalSupplyAndBorrow> {
+    const constantViews = await this._getVaultsConstants(vaultId);
+    const vaultConfig = this.pda.get_vault_config({ vaultId });
+    const { userSupplyData, overallTokenData } =
+      await this.liquidity.getUserSupplyData(
+        vaultConfig,
+        MintInfo.getMintForToken(constantViews.supplyToken) as MintKeys
+      );
+    const { userBorrowData, overallTokenData: overallTokenDataBorrow } =
+      await this.liquidity.getUserBorrowData(
+        vaultConfig,
+        MintInfo.getMintForToken(constantViews.borrowToken) as MintKeys
+      );
+    const exchangePricesAndRates = await this._getVaultsExchangePricesAndRates(
+      vaultId,
+      overallTokenData.supplyRate,
+      overallTokenDataBorrow.borrowRate
+    );
+
+    return this._getTotalSupplyAndBorrow(
+      vaultId,
+      exchangePricesAndRates,
+      userSupplyData.supply,
+      userBorrowData.borrow
+    );
   }
 
   getNftOwner(mint: PublicKey): PublicKey {

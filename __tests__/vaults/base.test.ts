@@ -924,6 +924,40 @@ describe("vaults", () => {
     await setup.rebalance(vaultId);
   });
 
+  it("should expose available vault rewards before and after rebalance", async () => {
+    const vaultId = 1;
+    const positionId = 1;
+
+    await setup.initPosition(vaultId, setup.alice);
+    await setup.updateSupplyRateMagnifier(vaultId, 5000);
+
+    await setup.operateVault({
+      vaultId,
+      positionId,
+      user: setup.alice,
+      positionOwner: setup.alice,
+      collateralAmount: new BN("1000000000"),
+      debtAmount: new BN("10000000"),
+      recipient: setup.alice,
+    });
+
+    setup.warp(24 * 60 * 60);
+
+    const rewardsBefore = await setup.vaultResolver.getAvailableRewards(vaultId);
+    const vaultDataBefore = await setup.vaultResolver.getVaultEntireData(vaultId);
+
+    expect(rewardsBefore.supply.gt(new BN(0))).to.be.true;
+    expect(vaultDataBefore.availableRewards.supply.toString()).to.be.eq(
+      rewardsBefore.supply.toString()
+    );
+
+    await setup.rebalance(vaultId);
+
+    const rewardsAfter = await setup.vaultResolver.getAvailableRewards(vaultId);
+
+    expect(rewardsAfter.supply.toString()).to.be.eq("0");
+  });
+
   it("Should not be able to create phantom debt", async () => {
     const vaultId = 1;
     await setup.initPosition(vaultId, setup.alice);

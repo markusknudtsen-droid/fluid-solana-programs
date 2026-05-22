@@ -77,6 +77,11 @@ export interface TotalSupplyAndBorrow {
   absorbedBorrow: BN;
 }
 
+export interface VaultAvailableRewards {
+  supply: BN;
+  borrow: BN;
+}
+
 export interface LimitsAndAvailability {
   withdrawLimit: BN;
   withdrawableUntilLimit: BN;
@@ -181,6 +186,7 @@ export interface VaultEntireData {
   liquidityUserBorrowData: any; // UserBorrowData from liquidity resolver
   vaultState: VaultState;
   totalSupplyAndBorrow: TotalSupplyAndBorrow;
+  availableRewards: VaultAvailableRewards;
 }
 
 // Additional utility types

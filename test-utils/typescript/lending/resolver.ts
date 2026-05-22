@@ -8,6 +8,7 @@ import {
 } from "@solana/spl-token";
 
 import {
+  AvailableRewardsData,
   FTokenDetails,
   FTokenDetailsUserPosition,
   FTokenInternalData,
@@ -225,6 +226,10 @@ export class LendingResolver {
       const rebalanceDifference = new BN(liquidityBalance.toString()).sub(
         totalAssets
       );
+      const availableRewardsData = this.buildAvailableRewardsData(
+        totalAssets,
+        new BN(liquidityBalance.toString())
+      );
 
       const details: FTokenDetails = {
         tokenAddress: fTokenMintPDA,
@@ -238,6 +243,7 @@ export class LendingResolver {
         conversionRateToAssets,
         rewardsRate,
         supplyRate: overallTokenData.supplyRate,
+        availableRewards: availableRewardsData.availableRewards,
         rebalanceDifference,
         userSupplyData,
       };
@@ -561,6 +567,33 @@ export class LendingResolver {
     }
   }
 
+  /**
+   * Get rewards that have accrued for an fToken but are not yet rebalanced
+   * @param fTokenOrMintKey Either an fToken address or MintKey
+   * @returns Current total assets, liquidity balance, and available rewards
+   */
+  public async getAvailableRewards(
+    fTokenOrMintKey: PublicKey | MintKeys
+  ): Promise<AvailableRewardsData> {
+    let mintKey: MintKeys;
+
+    if (typeof fTokenOrMintKey === "string") {
+      mintKey = fTokenOrMintKey as MintKeys;
+    } else {
+      mintKey = this.getMintKeyFromAddress(fTokenOrMintKey);
+      if (!mintKey) {
+        throw new Error("Could not derive mint key from address");
+      }
+    }
+
+    const lendingPDA = this.pda.get_lending(mintKey);
+    const lending = await this.program.account.lending.fetch(lendingPDA);
+    const totalAssets = await this.totalAssets(mintKey);
+    const liquidityBalance = new BN((await this.getLiquidityBalance(lending)).toString());
+
+    return this.buildAvailableRewardsData(totalAssets, liquidityBalance);
+  }
+
   // ============== PREVIEW METHODS ==============
 
   /**
@@ -847,6 +880,19 @@ export class LendingResolver {
       tokenExchangePrice,
       new BN(fTokenMintInfo.supply.toString())
     );
+  }
+
+  private buildAvailableRewardsData(
+    totalAssets: BN,
+    liquidityBalance: BN
+  ): AvailableRewardsData {
+    return {
+      totalAssets,
+      liquidityBalance,
+      availableRewards: totalAssets.gt(liquidityBalance)
+        ? totalAssets.sub(liquidityBalance)
+        : new BN(0),
+    };
   }
 
   // ============== PRIVATE HELPER METHODS ==============

@@ -2,6 +2,7 @@ import { Program, BN } from "@coral-xyz/anchor";
 import { Keypair, PublicKey } from "@solana/web3.js";
 
 import {
+  AvailableRewardsData,
   FTokenDetails,
   FTokenDetailsUserPosition,
   FTokenInternalData,
@@ -165,6 +166,13 @@ export class LendingResolver {
       new BN(10).pow(new BN(lending.decimals))
     );
 
+    const totalAssetsBN = new BN(totalAssets.toString());
+    const liquidityBalanceBN = new BN(liquidityBalance.toString());
+    const availableRewardsData = this.buildAvailableRewardsData(
+      totalAssetsBN,
+      liquidityBalanceBN
+    );
+
     // Create the FTokenDetails object
     const details: FTokenDetails = {
       tokenAddress: fTokenMintPDA,
@@ -172,15 +180,14 @@ export class LendingResolver {
       symbol: `f${MintInfo.getSymbol(mintKey)}`,
       decimals: lending.decimals,
       underlyingAddress: MintInfo.getMint(mintKey),
-      totalAssets: new BN(totalAssets.toString()),
+      totalAssets: totalAssetsBN,
       totalSupply: new BN(mintInfo.supply.toString()),
       conversionRateToShares,
       conversionRateToAssets,
       rewardsRate: new BN(rewardsRate.toString()),
       supplyRate: overallTokenData.supplyRate,
-      rebalanceDifference: new BN(liquidityBalance.toString()).sub(
-        new BN(totalAssets.toString())
-      ),
+      availableRewards: availableRewardsData.availableRewards,
+      rebalanceDifference: liquidityBalanceBN.sub(totalAssetsBN),
       userSupplyData,
     };
 
@@ -360,6 +367,31 @@ export class LendingResolver {
       );
       return defaultConfig;
     }
+  }
+
+  /**
+   * Get rewards that have accrued for an fToken but are not yet rebalanced
+   * @param mintKey The mint key for the token
+   * @returns Current total assets, liquidity balance, and available rewards
+   */
+  public async getAvailableRewards(
+    mintKey: MintKeys
+  ): Promise<AvailableRewardsData> {
+    const lendingPDA = this.pda.get_lending(mintKey);
+    const lending = await this.program.account.lending.fetch(lendingPDA);
+    const fTokenMintInfo = await MintInfo.getMintInfo(
+      localProvider.getProvider().connection,
+      this.pda.get_f_token_mint(mintKey)
+    );
+
+    const totalAssets = new BN(
+      this.calculateTotalAssets(lending, fTokenMintInfo.supply).toString()
+    );
+    const liquidityBalance = new BN(
+      (await this.getLiquidityBalance(lending, lendingPDA)).toString()
+    );
+
+    return this.buildAvailableRewardsData(totalAssets, liquidityBalance);
   }
 
   /**
@@ -700,6 +732,19 @@ export class LendingResolver {
       rewardsRate,
       rewardsEnded: false,
       rewardsStartTime: new BN(currentModel.startTime.toString()),
+    };
+  }
+
+  private buildAvailableRewardsData(
+    totalAssets: BN,
+    liquidityBalance: BN
+  ): AvailableRewardsData {
+    return {
+      totalAssets,
+      liquidityBalance,
+      availableRewards: totalAssets.gt(liquidityBalance)
+        ? totalAssets.sub(liquidityBalance)
+        : new BN(0),
     };
   }
 
