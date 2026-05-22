@@ -740,8 +740,8 @@ export class LendingResolver {
     liquidityBalance: BN
   ): AvailableRewardsData {
     return {
-      totalAssets: new BN(totalAssets.toString()),
-      liquidityBalance: new BN(liquidityBalance.toString()),
+      totalAssets,
+      liquidityBalance,
       availableRewards: totalAssets.gt(liquidityBalance)
         ? totalAssets.sub(liquidityBalance)
         : new BN(0),
