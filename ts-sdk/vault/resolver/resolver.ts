@@ -23,6 +23,7 @@ import {
   Configs,
   ExchangePricesAndRates,
   TotalSupplyAndBorrow,
+  VaultAvailableRewards,
   LimitsAndAvailability,
   VaultState,
 } from "./types";
@@ -1221,6 +1222,12 @@ export class Resolver extends State {
     return vaultsData;
   }
 
+  async getAvailableRewards(vaultId: number): Promise<VaultAvailableRewards> {
+    const totalSupplyAndBorrow = (await this.getVaultEntireData(vaultId))
+      .totalSupplyAndBorrow;
+    return this.buildAvailableRewards(totalSupplyAndBorrow);
+  }
+
   async getVaultEntireData(vaultId: number): Promise<VaultEntireData> {
     const constantViews = await this._getVaultsConstants(vaultId);
 
@@ -1265,6 +1272,13 @@ export class Resolver extends State {
       MintInfo.getMintForToken(constantViews.borrowToken) as MintKeys
     );
 
+    const totalSupplyAndBorrow = await this._getTotalSupplyAndBorrow(
+      vaultId,
+      exchangePricesAndRates,
+      liquiditySupply,
+      liquidityBorrow
+    );
+
     let vaultEntireData: VaultEntireData = {
       vault: this.get_vault_config({ vaultId }),
       isSmartCol: false,
@@ -1276,16 +1290,32 @@ export class Resolver extends State {
       liquidityUserSupplyData: userSupplyData,
       liquidityUserBorrowData: userBorrowData,
       vaultState: await this.getVaultState(vaultId),
-
-      totalSupplyAndBorrow: await this._getTotalSupplyAndBorrow(
-        vaultId,
-        exchangePricesAndRates,
-        liquiditySupply,
-        liquidityBorrow
-      ),
+      totalSupplyAndBorrow,
+      availableRewards: this.buildAvailableRewards(totalSupplyAndBorrow),
     };
 
     return vaultEntireData;
+  }
+
+  private buildAvailableRewards(
+    totalSupplyAndBorrow: TotalSupplyAndBorrow
+  ): VaultAvailableRewards {
+    return {
+      supply: totalSupplyAndBorrow.totalSupplyLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalSupplyVault
+      )
+        ? totalSupplyAndBorrow.totalSupplyLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalSupplyVault
+          )
+        : new BN(0),
+      borrow: totalSupplyAndBorrow.totalBorrowLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalBorrowVault
+      )
+        ? totalSupplyAndBorrow.totalBorrowLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalBorrowVault
+          )
+        : new BN(0),
+    };
   }
 
   async getNftOwner(mint: PublicKey): Promise<PublicKey> {

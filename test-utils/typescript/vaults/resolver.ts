@@ -13,6 +13,7 @@ import {
   Configs,
   ExchangePricesAndRates,
   TotalSupplyAndBorrow,
+  VaultAvailableRewards,
   LimitsAndAvailability,
   VaultState,
   UserPosition,
@@ -630,6 +631,13 @@ export class VaultResolver {
       userBorrowData
     );
 
+    const totalSupplyAndBorrow = await this._getTotalSupplyAndBorrow(
+      vaultId,
+      exchangePricesAndRates,
+      liquiditySupply,
+      liquidityBorrow
+    );
+
     let vaultEntireData: VaultEntireData = {
       vault: this.pda.get_vault_config({ vaultId }),
       isSmartCol: false,
@@ -641,15 +649,38 @@ export class VaultResolver {
       liquidityUserSupplyData: userSupplyData,
       liquidityUserBorrowData: userBorrowData,
       vaultState: await this.getVaultState(vaultId),
-      totalSupplyAndBorrow: await this._getTotalSupplyAndBorrow(
-        vaultId,
-        exchangePricesAndRates,
-        liquiditySupply,
-        liquidityBorrow
-      ),
+      totalSupplyAndBorrow,
+      availableRewards: this.buildAvailableRewards(totalSupplyAndBorrow),
     };
 
     return vaultEntireData;
+  }
+
+  async getAvailableRewards(vaultId: number): Promise<VaultAvailableRewards> {
+    const totalSupplyAndBorrow = (await this.getVaultEntireData(vaultId))
+      .totalSupplyAndBorrow;
+    return this.buildAvailableRewards(totalSupplyAndBorrow);
+  }
+
+  private buildAvailableRewards(
+    totalSupplyAndBorrow: TotalSupplyAndBorrow
+  ): VaultAvailableRewards {
+    return {
+      supply: totalSupplyAndBorrow.totalSupplyLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalSupplyVault
+      )
+        ? totalSupplyAndBorrow.totalSupplyLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalSupplyVault
+          )
+        : new BN(0),
+      borrow: totalSupplyAndBorrow.totalBorrowLiquidityOrDex.gt(
+        totalSupplyAndBorrow.totalBorrowVault
+      )
+        ? totalSupplyAndBorrow.totalBorrowLiquidityOrDex.sub(
+            totalSupplyAndBorrow.totalBorrowVault
+          )
+        : new BN(0),
+    };
   }
 
   getNftOwner(mint: PublicKey): PublicKey {
